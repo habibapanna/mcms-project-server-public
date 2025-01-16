@@ -145,6 +145,15 @@ app.get('/popular-camps', async (req, res) => {
   }
 });
 
+app.get('/registered-camps', async (req, res) => {
+  try {
+    const participants = await participantsCollection.find().toArray();
+    res.json(participants);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching registered camps', error: error.message });
+  }
+});
+
 
 app.post('/register-participant', async (req, res) => {
   try {
@@ -170,6 +179,61 @@ app.post('/register-participant', async (req, res) => {
     res.status(500).json({ message: 'Error registering participant', error: err.message });
   }
 });
+
+app.put('/confirm-registration/:id', async (req, res) => {
+  const participantId = req.params.id;
+
+  try {
+    const result = await participantsCollection.updateOne(
+      { _id: new ObjectId(participantId) },
+      { $set: { confirmationStatus: 'Confirmed' } }
+    );
+
+    if (result.modifiedCount > 0) {
+      res.json({ message: 'Registration confirmed successfully' });
+    } else {
+      res.status(404).json({ message: 'Participant not found or already confirmed' });
+    }
+  } catch (error) {
+    res.status(500).json({ message: 'Error confirming registration', error: error.message });
+  }
+});
+
+app.delete('/cancel-registration/:id', async (req, res) => {
+  const participantId = req.params.id;
+
+  try {
+    const participant = await participantsCollection.findOne({ _id: new ObjectId(participantId) });
+
+    if (!participant) {
+      return res.status(404).json({ message: 'Participant not found' });
+    }
+
+    // Check if the participant can be canceled
+    if (participant.paymentStatus === 'Paid' && participant.confirmationStatus === 'Confirmed') {
+      return res.status(400).json({ message: 'Cannot cancel a confirmed and paid registration' });
+    }
+
+    // Remove participant from the collection
+    const result = await participantsCollection.deleteOne({ _id: new ObjectId(participantId) });
+
+    if (result.deletedCount > 0) {
+      // Decrement the participant count in the corresponding camp
+      await campsCollection.updateOne(
+        { _id: new ObjectId(participant.campId) },
+        { $inc: { participantCount: -1 } }
+      );
+
+      res.json({ message: 'Registration canceled successfully' });
+    } else {
+      res.status(404).json({ message: 'Error canceling registration' });
+    }
+  } catch (error) {
+    res.status(500).json({ message: 'Error canceling registration', error: error.message });
+  }
+});
+
+
 
 const addFeedback = async (campId, participantId, rating, feedbackText) => {
   const feedback = {
@@ -208,6 +272,26 @@ app.get('/upcoming-camps', async (req, res) => {
     res.status(500).json({ message: 'Error fetching upcoming camps', error: err.message });
   }
 });
+
+app.put('/update-camp/:campId', async (req, res) => {
+  const { campId } = req.params;
+  const updatedDetails = req.body;
+
+  try {
+    const result = await campsCollection.updateOne(
+      { _id: new ObjectId(campId) },
+      { $set: updatedDetails }
+    );
+    if (result.modifiedCount > 0) {
+      res.json({ message: 'Camp updated successfully' });
+    } else {
+      res.status(404).json({ message: 'Camp not found or no changes made' });
+    }
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating camp', error: error.message });
+  }
+});
+
 
 
 
