@@ -24,6 +24,7 @@ async function connectDB() {
   console.log("MongoDB connected");
 }
 const participantsCollection = client.db("medicalCamp").collection("participants");
+const feedbackCollection = client.db("medicalCamp").collection("feedback");
 
 // Call the function to establish a connection
 connectDB().catch(console.dir);
@@ -37,12 +38,64 @@ app.get('/', (req, res) => {
   res.send('Medical Camp Management System (MCMS) is running');
 });
 
+// Route to add a new camp
+app.post('/add-camp', async (req, res) => {
+  try {
+    const {
+      campName,
+      image,
+      campFees,
+      dateTime,
+      location,
+      healthcareProfessional,
+      description,
+    } = req.body;
+
+    // Validate required fields
+    if (
+      !campName ||
+      !image ||
+      !campFees ||
+      !dateTime ||
+      !location ||
+      !healthcareProfessional ||
+      !description
+    ) {
+      return res.status(400).json({ message: 'All fields are required.' });
+    }
+
+    // Create a new camp object
+    const newCamp = {
+      campName,
+      image,
+      campFees: parseFloat(campFees), // Ensure camp fees are stored as a number
+      dateTime: new Date(dateTime), // Convert dateTime to a Date object
+      location,
+      healthcareProfessional,
+      participantCount: 0, // Default participant count is 0
+      description,
+      createdAt: new Date(), // Timestamp for when the camp is created
+    };
+
+    // Insert the new camp into the database
+    const result = await campsCollection.insertOne(newCamp);
+
+    res.status(201).json({
+      message: 'Camp added successfully!',
+      campId: result.insertedId,
+    });
+  } catch (err) {
+    console.error('Error adding camp:', err);
+    res.status(500).json({ message: 'An error occurred while adding the camp.', error: err.message });
+  }
+});
+
+
+
 app.get('/camps', async(req, res) =>{
   const result = await campsCollection.find().toArray();
   res.send(result);
 })
-
-
 
 app.get('/camps/:id', async (req, res) => {
   try {
@@ -65,8 +118,6 @@ app.get('/camps/:id', async (req, res) => {
     res.status(500).json({ message: 'Error fetching camp details', error: err.message });
   }
 });
-
-
 
 
 // Route to get all available camps
@@ -117,6 +168,44 @@ app.post('/register-participant', async (req, res) => {
     res.status(201).json({ message: 'Registration successful', participant: result.ops[0] });
   } catch (err) {
     res.status(500).json({ message: 'Error registering participant', error: err.message });
+  }
+});
+
+const addFeedback = async (campId, participantId, rating, feedbackText) => {
+  const feedback = {
+    campId,
+    participantId,
+    rating,
+    feedbackText,
+    date: new Date(),
+  };
+
+  try {
+    const result = await feedbackCollection.insertOne(feedback);
+    console.log('Feedback added:', result);
+  } catch (error) {
+    console.error('Error adding feedback:', error);
+  }
+};
+
+app.post('/submit-feedback', async (req, res) => {
+  const { campId, participantId, rating, feedbackText } = req.body;
+
+  try {
+    await addFeedback(campId, participantId, rating, feedbackText);
+    res.json({ message: 'Feedback submitted successfully!' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error submitting feedback', error: err.message });
+  }
+});
+
+
+app.get('/upcoming-camps', async (req, res) => {
+  try {
+    const upcomingCamps = await campsCollection.find({ date: { $gte: new Date() } }).toArray();
+    res.json(upcomingCamps);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching upcoming camps', error: err.message });
   }
 });
 
