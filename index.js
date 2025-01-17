@@ -105,6 +105,15 @@ app.get('/camps', async(req, res) =>{
   res.send(result);
 })
 
+// delete camp
+app.delete('/camps/:id', async(req, res) => {
+  const id = req.params.id;
+  const query = { _id: new ObjectId(id) }
+  const result = await campsCollection.deleteOne(query);
+  res.send(result);
+})
+
+
 app.get('/camps/:id', async (req, res) => {
   try {
     const campId = req.params.id;
@@ -152,6 +161,7 @@ app.get('/popular-camps', async (req, res) => {
     res.status(500).json({ message: 'Error fetching camps', error: err.message });
   }
 });
+
 
 app.get('/registered-camps', async (req, res) => {
   try {
