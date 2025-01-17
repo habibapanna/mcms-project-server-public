@@ -25,6 +25,7 @@ async function connectDB() {
 }
 const participantsCollection = client.db("medicalCamp").collection("participants");
 const feedbackCollection = client.db("medicalCamp").collection("feedback");
+const usersCollection = client.db("medicalCamp").collection("users");
 
 // Call the function to establish a connection
 connectDB().catch(console.dir);
@@ -37,6 +38,15 @@ app.use(express.json());
 app.get('/', (req, res) => {
   res.send('Medical Camp Management System (MCMS) is running');
 });
+
+app.post("/users", async (req, res) => {
+ const newUser = req.body;
+ const result = await usersCollection.insertOne(newUser);
+
+ res.send(result);
+})
+
+
 
 // Route to add a new camp
 app.post('/add-camp', async (req, res) => {
@@ -89,8 +99,6 @@ app.post('/add-camp', async (req, res) => {
     res.status(500).json({ message: 'An error occurred while adding the camp.', error: err.message });
   }
 });
-
-
 
 app.get('/camps', async(req, res) =>{
   const result = await campsCollection.find().toArray();
