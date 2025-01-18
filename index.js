@@ -40,13 +40,26 @@ app.get('/', (req, res) => {
 });
 
 app.post("/users", async (req, res) => {
- const newUser = req.body;
- const result = await usersCollection.insertOne(newUser);
+  try {
+      const newUser = req.body;
+      console.log("Received new user:", newUser); // Debug log
 
- res.send(result);
-})
+      const query = { email: newUser.email };
+      const existingUser = await usersCollection.findOne(query);
 
+      if (existingUser) {
+          console.log("User already exists:", existingUser); // Debug log
+          return res.send({ message: "user already exists", insertedId: null });
+      }
 
+      const result = await usersCollection.insertOne(newUser);
+      console.log("New user inserted:", result); // Debug log
+      res.send(result);
+  } catch (error) {
+      console.error("Error in /users endpoint:", error);
+      res.status(500).send({ message: "Internal server error" });
+  }
+});
 
 // Route to add a new camp
 app.post('/add-camp', async (req, res) => {
@@ -113,7 +126,6 @@ app.delete('/camps/:id', async(req, res) => {
   res.send(result);
 })
 
-
 app.get('/camps/:id', async (req, res) => {
   try {
     const campId = req.params.id;
@@ -136,7 +148,6 @@ app.get('/camps/:id', async (req, res) => {
   }
 });
 
-
 // Route to get all available camps
 app.get('/available-camps', async (req, res) => {
   try {
@@ -146,7 +157,6 @@ app.get('/available-camps', async (req, res) => {
     res.status(500).json({ message: 'Error fetching available camps', error: err.message });
   }
 });
-
 
 // Route to get the top 6 camps by highest participant count
 app.get('/popular-camps', async (req, res) => {
@@ -162,7 +172,6 @@ app.get('/popular-camps', async (req, res) => {
   }
 });
 
-
 app.get('/registered-camps', async (req, res) => {
   try {
     const participants = await participantsCollection.find().toArray();
@@ -171,7 +180,6 @@ app.get('/registered-camps', async (req, res) => {
     res.status(500).json({ message: 'Error fetching registered camps', error: error.message });
   }
 });
-
 
 app.post('/register-participant', async (req, res) => {
   try {
@@ -251,8 +259,6 @@ app.delete('/cancel-registration/:id', async (req, res) => {
   }
 });
 
-
-
 const addFeedback = async (campId, participantId, rating, feedbackText) => {
   const feedback = {
     campId,
@@ -280,7 +286,6 @@ app.post('/submit-feedback', async (req, res) => {
     res.status(500).json({ message: 'Error submitting feedback', error: err.message });
   }
 });
-
 
 app.get('/upcoming-camps', async (req, res) => {
   try {
