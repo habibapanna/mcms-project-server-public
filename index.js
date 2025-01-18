@@ -172,7 +172,7 @@ app.get('/popular-camps', async (req, res) => {
   }
 });
 
-app.get('/registered-camps', async (req, res) => {
+app.get('/registered-camps/:email', async (req, res) => {
   try {
     const participants = await participantsCollection.find().toArray();
     res.json(participants);
@@ -205,6 +205,39 @@ app.post('/register-participant', async (req, res) => {
     res.status(500).json({ message: 'Error registering participant', error: err.message });
   }
 });
+
+app.get('/participants', async(req, res) =>{
+  const result = await participantsCollection.find().toArray();
+  res.send(result);
+})
+
+// Route to update participant profile
+app.put('/participants/:id', async (req, res) => {
+  const participantId = req.params.id;
+  const updatedInfo = req.body;
+
+  try {
+    // Validate the participant ID
+    if (!ObjectId.isValid(participantId)) {
+      return res.status(400).json({ message: 'Invalid participant ID format' });
+    }
+
+    // Update the participant information in the database
+    const result = await participantsCollection.updateOne(
+      { _id: new ObjectId(participantId) },
+      { $set: updatedInfo }
+    );
+
+    if (result.modifiedCount > 0) {
+      res.json({ message: 'Profile updated successfully' });
+    } else {
+      res.status(404).json({ message: 'Participant not found or no changes made' });
+    }
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating profile', error: error.message });
+  }
+});
+
 
 app.put('/confirm-registration/:id', async (req, res) => {
   const participantId = req.params.id;
@@ -314,8 +347,6 @@ app.put('/update-camp/:campId', async (req, res) => {
     res.status(500).json({ message: 'Error updating camp', error: error.message });
   }
 });
-
-
 
 
 // Route to join a camp (increase participant count)
