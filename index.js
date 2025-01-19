@@ -219,31 +219,26 @@ app.get('/participants', async(req, res) =>{
 })
 
 // Route to update participant profile
-app.put('/participants/:id', async (req, res) => {
+app.get('/participants/:id', async (req, res) => {
   const participantId = req.params.id;
-  const updatedInfo = req.body;
 
   try {
-    // Validate the participant ID
     if (!ObjectId.isValid(participantId)) {
       return res.status(400).json({ message: 'Invalid participant ID format' });
     }
 
-    // Update the participant information in the database
-    const result = await participantsCollection.updateOne(
-      { _id: new ObjectId(participantId) },
-      { $set: updatedInfo }
-    );
+    const participant = await participantsCollection.findOne({ _id: new ObjectId(participantId) });
 
-    if (result.modifiedCount > 0) {
-      res.json({ message: 'Profile updated successfully' });
-    } else {
-      res.status(404).json({ message: 'Participant not found or no changes made' });
+    if (!participant) {
+      return res.status(404).json({ message: 'Participant not found' });
     }
+
+    res.json(participant);
   } catch (error) {
-    res.status(500).json({ message: 'Error updating profile', error: error.message });
+    res.status(500).json({ message: 'Error fetching participant', error: error.message });
   }
 });
+
 
 app.put('/confirm-registration/:id', async (req, res) => {
   const participantId = req.params.id;
