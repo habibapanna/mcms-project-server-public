@@ -1,6 +1,7 @@
 const express = require('express');
 const app = express();
 const cors = require('cors');
+// const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
@@ -26,6 +27,16 @@ async function connectDB() {
 const participantsCollection = client.db("medicalCamp").collection("participants");
 const feedbackCollection = client.db("medicalCamp").collection("feedback");
 const usersCollection = client.db("medicalCamp").collection("users");
+
+// app.post('/jwt', async(req, res) =>{
+//   const user = req.body;
+//   const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '1h'});
+//   res.send({ token });
+// })
+
+// const verifyToken = (req, res, next) => {
+
+// }
 
 // Call the function to establish a connection
 connectDB().catch(console.dir);
@@ -181,15 +192,9 @@ app.get('/registered-camps/:email', async (req, res) => {
   }
 });
 
-app.post('/register-participant', async (req, res) => {
+app.post('/participants', async (req, res) => {
   try {
     const participant = req.body; // Get participant data from request body
-
-    // Check if participant already exists
-    const existingParticipant = await participantsCollection.findOne({ email: participant.email });
-    if (existingParticipant) {
-      return res.status(400).json({ message: 'Participant already registered' });
-    }
 
     // Save the participant to the database
     const result = await participantsCollection.insertOne(participant);
@@ -200,11 +205,13 @@ app.post('/register-participant', async (req, res) => {
       { $inc: { participantCount: 1 } }
     );
 
-    res.status(201).json({ message: 'Registration successful', participant: result.ops[0] });
+    res.status(201).json({ message: 'Registration successful', participantId: result.insertedId });
   } catch (err) {
-    res.status(500).json({ message: 'Error registering participant', error: err.message });
+    console.error("Error in /participants endpoint:", err);
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
+
 
 app.get('/participants', async(req, res) =>{
   const result = await participantsCollection.find().toArray();
@@ -237,7 +244,6 @@ app.put('/participants/:id', async (req, res) => {
     res.status(500).json({ message: 'Error updating profile', error: error.message });
   }
 });
-
 
 app.put('/confirm-registration/:id', async (req, res) => {
   const participantId = req.params.id;
@@ -348,7 +354,6 @@ app.put('/update-camp/:campId', async (req, res) => {
   }
 });
 
-
 // Route to join a camp (increase participant count)
 app.post('/join-camp/:campId', async (req, res) => {
   try {
@@ -368,7 +373,6 @@ app.post('/join-camp/:campId', async (req, res) => {
     res.status(500).json({ message: 'Error joining the camp', error: err.message });
   }
 });
-
 
 // Start the server
 app.listen(port, () => {
