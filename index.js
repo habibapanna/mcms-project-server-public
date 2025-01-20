@@ -5,10 +5,8 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-
 // MongoDB connection URI
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.z1fic.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
-
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -70,7 +68,6 @@ const verifyRole = (role) => (req, res, next) => {
 
 // Call the function to establish a connection
 connectDB().catch(console.dir);
-
 
 // Root route
 app.get('/', (req, res) => {
@@ -186,14 +183,12 @@ app.get('/camps/:id', async (req, res) => {
     if (!ObjectId.isValid(campId)) {
       return res.status(400).json({ message: 'Invalid camp ID format' });
     }
-
     // Convert the string ID to ObjectId
     const camp = await campsCollection.findOne({ _id: new ObjectId(campId) });
 
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
-
     res.json(camp);
   } catch (err) {
     res.status(500).json({ message: 'Error fetching camp details', error: err.message });
@@ -253,7 +248,6 @@ app.post('/participants', async (req, res) => {
   }
 });
 
-
 app.get('/participants', async(req, res) =>{
   const result = await participantsCollection.find().toArray();
   res.send(result);
@@ -279,7 +273,6 @@ app.get('/participants/:id', async (req, res) => {
     res.status(500).json({ message: 'Error fetching participant', error: error.message });
   }
 });
-
 
 app.put('/confirm-registration/:id', async (req, res) => {
   const participantId = req.params.id;
@@ -362,23 +355,35 @@ app.post('/submit-feedback', async (req, res) => {
   }
 });
 
+// Route to update a camp
+app.put('/camps/:id', async (req, res) => {
+  console.log('Request body:', req.body); // Log the body to ensure it's correct
+  const updatedCamp = { ...req.body }; // Create a shallow copy of the request body
+  const campId = req.params.id;
 
-app.put('/update-camp/:campId', async (req, res) => {
-  const { campId } = req.params;
-  const updatedDetails = req.body;
+  // Remove the _id field from the update data
+  delete updatedCamp._id;
 
   try {
-    const result = await campsCollection.updateOne(
-      { _id: new ObjectId(campId) },
-      { $set: updatedDetails }
-    );
-    if (result.modifiedCount > 0) {
-      res.json({ message: 'Camp updated successfully' });
-    } else {
-      res.status(404).json({ message: 'Camp not found or no changes made' });
+    // Validate if the provided ID is a valid ObjectId
+    if (!ObjectId.isValid(campId)) {
+      return res.status(400).json({ message: 'Invalid camp ID format' });
     }
-  } catch (error) {
-    res.status(500).json({ message: 'Error updating camp', error: error.message });
+
+    // Proceed with the update logic
+    const result = await campsCollection.updateOne(
+      { _id: new ObjectId(campId) }, // Find camp by ID
+      { $set: updatedCamp }, // Update the camp (excluding _id)
+    );
+
+    if (result.modifiedCount === 0) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+
+    res.json({ message: 'Camp updated successfully', updatedCamp });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
