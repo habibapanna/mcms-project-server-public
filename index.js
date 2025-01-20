@@ -1,13 +1,17 @@
 const express = require('express');
 const app = express();
 const cors = require('cors');
-// const jwt = require('jsonwebtoken');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 // MongoDB connection URI
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.z1fic.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
 
 const client = new MongoClient(uri, {
   serverApi: {
@@ -28,48 +32,85 @@ const participantsCollection = client.db("medicalCamp").collection("participants
 const feedbackCollection = client.db("medicalCamp").collection("feedback");
 const usersCollection = client.db("medicalCamp").collection("users");
 
-// app.post('/jwt', async(req, res) =>{
-//   const user = req.body;
-//   const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '1h'});
-//   res.send({ token });
-// })
+// Generate JWT token
+app.post('/jwt', async (req, res) => {
+  const { email } = req.body;
+  const user = await usersCollection.findOne({ email });
 
-// const verifyToken = (req, res, next) => {
+  if (!user) return res.status(401).send({ message: 'User not found' });
 
-// }
+  const token = jwt.sign(
+    { email: user.email, role: user.role },
+    process.env.ACCESS_TOKEN_SECRET,
+    { expiresIn: '1h' }
+  );
+
+  res.send({ token });
+});
+
+// Middleware to verify JWT
+const verifyToken = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(403).send({ message: 'Access Denied' });
+
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+    if (err) return res.status(403).send({ message: 'Invalid Token' });
+    req.user = decoded;
+    next();
+  });
+};
+
+// Middleware to verify roles
+const verifyRole = (role) => (req, res, next) => {
+  if (req.user.role !== role) {
+    return res.status(403).send({ message: 'Forbidden: Insufficient Role' });
+  }
+  next();
+};
 
 // Call the function to establish a connection
 connectDB().catch(console.dir);
 
-// Middleware
-app.use(cors());
-app.use(express.json());
 
 // Root route
 app.get('/', (req, res) => {
   res.send('Medical Camp Management System (MCMS) is running');
 });
 
-app.post("/users", async (req, res) => {
+// Add user role
+app.post('/users', async (req, res) => {
   try {
-      const newUser = req.body;
-      console.log("Received new user:", newUser); // Debug log
+    const newUser = req.body;
+    const query = { email: newUser.email };
+    const existingUser = await usersCollection.findOne(query);
 
-      const query = { email: newUser.email };
-      const existingUser = await usersCollection.findOne(query);
+    if (existingUser) {
+      return res.send({ message: 'User already exists', insertedId: null });
+    }
 
-      if (existingUser) {
-          console.log("User already exists:", existingUser); // Debug log
-          return res.send({ message: "user already exists", insertedId: null });
-      }
+    // Assign 'Participant' role by default
+    newUser.role = newUser.role || 'Participant';
 
-      const result = await usersCollection.insertOne(newUser);
-      console.log("New user inserted:", result); // Debug log
-      res.send(result);
+    const result = await usersCollection.insertOne(newUser);
+    res.send(result);
   } catch (error) {
-      console.error("Error in /users endpoint:", error);
-      res.status(500).send({ message: "Internal server error" });
+    res.status(500).send({ message: 'Internal server error' });
   }
+});
+
+// Protected route for organizers
+app.get('/organizer-route', verifyToken, verifyRole('Organizer'), async (req, res) => {
+  res.send({ message: 'Welcome, Organizer!' });
+});
+
+// Protected route for participants
+app.get('/participant-route', verifyToken, verifyRole('Participant'), async (req, res) => {
+  res.send({ message: 'Welcome, Participant!' });
+});
+
+// General protected route
+app.get('/protected-route', verifyToken, async (req, res) => {
+  res.send({ message: `Hello, ${req.user.role}` });
 });
 
 // Route to add a new camp
@@ -321,14 +362,6 @@ app.post('/submit-feedback', async (req, res) => {
   }
 });
 
-app.get('/upcoming-camps', async (req, res) => {
-  try {
-    const upcomingCamps = await campsCollection.find({ date: { $gte: new Date() } }).toArray();
-    res.json(upcomingCamps);
-  } catch (err) {
-    res.status(500).json({ message: 'Error fetching upcoming camps', error: err.message });
-  }
-});
 
 app.put('/update-camp/:campId', async (req, res) => {
   const { campId } = req.params;
