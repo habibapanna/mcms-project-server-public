@@ -32,27 +32,23 @@ const usersCollection = client.db("medicalCamp").collection("users");
 
 // Generate JWT token
 app.post('/jwt', async (req, res) => {
-  const { email } = req.body;
-  const user = await usersCollection.findOne({ email });
-
-  if (!user) return res.status(401).send({ message: 'User not found' });
-
-  const token = jwt.sign(
-    { email: user.email, role: user.role },
+  const user = req.body;
+  const token = jwt.sign(user,
     process.env.ACCESS_TOKEN_SECRET,
     { expiresIn: '1h' }
   );
-
   res.send({ token });
 });
 
 // Middleware to verify JWT
 const verifyToken = (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(403).send({ message: 'Access Denied' });
-
+  console.log('inside verify token', req.headers.authorization);
+  if (!req.headers.authorization){
+    return res.status(403).send({ message: 'Access Denied' });
+  }
+  const token = req.headers.authorization.split(' ')[1]
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
-    if (err) return res.status(403).send({ message: 'Invalid Token' });
+    if (err) return res.status(401).send({ message: 'Invalid Token' });
     req.user = decoded;
     next();
   });
@@ -95,9 +91,28 @@ app.post('/users', async (req, res) => {
   }
 });
 
-app.get('/users', async(req, res) =>{
-  const result = await usersCollection.find().toArray();
-  res.send(result);
+app.get('/users', verifyToken, async (req, res) => {
+  try {
+    const result = await usersCollection.find().toArray();
+    res.send(result);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: 'Error fetching users' });
+  }
+});
+
+app.get('users/organizer/:email', verifyToken, async(req, res) =>{
+const email = req.params.email;
+if(email !== req.decoded.email) {
+  return res.status(403).send({message: 'unauthorized access'})
+}
+const query= {email: email};
+const user = await usersCollection.findOne(query);
+let organizer = false;
+if(user){
+  organizer = user?.role === 'organizer';
+}
+res.send({ organizer });
 })
 
 app.patch('/users/organizer/:id', async(req, res) => {
