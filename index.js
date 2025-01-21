@@ -95,6 +95,39 @@ app.post('/users', async (req, res) => {
   }
 });
 
+app.get('/users', async(req, res) =>{
+  const result = await usersCollection.find().toArray();
+  res.send(result);
+})
+
+app.patch('/users/organizer/:id', async(req, res) => {
+  const id = req.params.id;
+  const filter = {_id: new ObjectId(id)};
+  const updatedDoc = {
+    $set: {
+      role: 'organizer'
+    }
+  }
+  const result = await usersCollection.updateOne(filter, updatedDoc);
+  res.send(result);
+})
+
+// Delete a user by ID
+app.delete('/users/:id', async (req, res) => {
+  const id = req.params.id;
+  const query = { _id: new ObjectId(id) };
+
+  try {
+    const result = await usersCollection.deleteOne(query);
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error deleting user', error: error.message });
+  }
+});
+
 // Protected route for organizers
 app.get('/organizer-route', verifyToken, verifyRole('Organizer'), async (req, res) => {
   res.send({ message: 'Welcome, Organizer!' });
