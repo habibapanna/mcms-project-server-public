@@ -11,6 +11,7 @@ const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster
 app.use(cors());
 app.use(express.json());
 
+
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -18,7 +19,8 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   }
 });
-
+// Call the function to establish a connection
+connectDB().catch(console.dir);
 // Connect to MongoDB and define the database
 let campsCollection;
 async function connectDB() {
@@ -54,16 +56,16 @@ const verifyToken = (req, res, next) => {
   });
 };
 
-// Middleware to verify roles
-const verifyRole = (role) => (req, res, next) => {
-  if (req.user.role !== role) {
-    return res.status(403).send({ message: 'Forbidden: Insufficient Role' });
-  }
-  next();
-};
-
-// Call the function to establish a connection
-connectDB().catch(console.dir);
+const verifyOrganizer = async( req, res, next ) =>{
+  const email = req.decoded.email;
+  const query = {email: email};
+  const user = await usersCollection.findOne(query);
+  const isOrganizer = user?.role === 'organizer';
+  if(!isOrganizer){
+  return res.status(404).send({message: 'forbidden access'});
+}
+next();
+}
 
 // Root route
 app.get('/', (req, res) => {
@@ -101,21 +103,19 @@ app.get('/users', verifyToken, async (req, res) => {
   }
 });
 
-app.get('users/organizer/:email', verifyToken, async(req, res) =>{
-const email = req.params.email;
-if(email !== req.decoded.email) {
-  return res.status(403).send({message: 'unauthorized access'})
-}
-const query= {email: email};
-const user = await usersCollection.findOne(query);
-let organizer = false;
-if(user){
-  organizer = user?.role === 'organizer';
-}
-res.send({ organizer });
-})
+app.get('/users/organizer/:email', async (req, res) => {
+  const email = req.params.email;
+  const user = await usersCollection.findOne({ email });
+  if (user?.role === 'organizer') {
+      res.send({ organizer: true });
+  } else {
+      res.send({ organizer: false });
+  }
+});
 
-app.patch('/users/organizer/:id', async(req, res) => {
+
+
+app.patch('/users/organizer/:id', verifyToken, async(req, res) => {
   const id = req.params.id;
   const filter = {_id: new ObjectId(id)};
   const updatedDoc = {
@@ -141,21 +141,6 @@ app.delete('/users/:id', async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: 'Error deleting user', error: error.message });
   }
-});
-
-// Protected route for organizers
-app.get('/organizer-route', verifyToken, verifyRole('Organizer'), async (req, res) => {
-  res.send({ message: 'Welcome, Organizer!' });
-});
-
-// Protected route for participants
-app.get('/participant-route', verifyToken, verifyRole('Participant'), async (req, res) => {
-  res.send({ message: 'Welcome, Participant!' });
-});
-
-// General protected route
-app.get('/protected-route', verifyToken, async (req, res) => {
-  res.send({ message: `Hello, ${req.user.role}` });
 });
 
 // Route to add a new camp
@@ -301,26 +286,38 @@ app.get('/participants', async(req, res) =>{
   res.send(result);
 })
 
-// Route to update participant profile
-app.get('/participants/:id', async (req, res) => {
-  const participantId = req.params.id;
-
+app.get('/participants/:email', async (req, res) => {
+  const email = req.params.email;
   try {
-    if (!ObjectId.isValid(participantId)) {
-      return res.status(400).json({ message: 'Invalid participant ID format' });
-    }
-
-    const participant = await participantsCollection.findOne({ _id: new ObjectId(participantId) });
-
-    if (!participant) {
-      return res.status(404).json({ message: 'Participant not found' });
-    }
-
-    res.json(participant);
+      const participant = await participantsCollection.findOne({ email });
+      if (participant) {
+          res.send(participant);
+      } else {
+          res.status(404).send({ message: 'Participant not found' });
+      }
   } catch (error) {
-    res.status(500).json({ message: 'Error fetching participant', error: error.message });
+      res.status(500).send({ message: 'Error fetching participant', error });
   }
 });
+
+app.put('/participants/:email', async (req, res) => {
+  const email = req.params.email;
+  const updatedInfo = req.body;
+  try {
+      const result = await participantsCollection.updateOne(
+          { email },
+          { $set: updatedInfo }
+      );
+      if (result.modifiedCount > 0) {
+          res.send({ message: 'Profile updated successfully' });
+      } else {
+          res.status(404).send({ message: 'Participant not found' });
+      }
+  } catch (error) {
+      res.status(500).send({ message: 'Error updating profile', error });
+  }
+});
+
 
 app.put('/confirm-registration/:id', async (req, res) => {
   const participantId = req.params.id;
