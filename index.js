@@ -6,11 +6,12 @@ require('dotenv').config();
 const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
-// MongoDB connection URI
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.z1fic.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// MongoDB connection URI
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.z1fic.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 
 const client = new MongoClient(uri, {
@@ -20,21 +21,17 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   }
 });
-// Call the function to establish a connection
-connectDB().catch(console.dir);
-// Connect to MongoDB and define the database
-let campsCollection, participantsCollection, feedbackCollection, usersCollection, paymentsCollection;
 
-async function connectDB() {
-  await client.connect();
-  const db = client.db("medicalCamp");
-  campsCollection = db.collection("camps");
-  participantsCollection = db.collection("participants");
-  feedbackCollection = db.collection("feedback");
-  usersCollection = db.collection("users");
-  paymentsCollection = db.collection("payments");
-  console.log("MongoDB connected");
-}
+async function run () {
+  try {
+  // await client.connect();
+  // Collections
+  const campsCollection = client.db("medicalCamp").collection("camps");
+  const participantsCollection = client.db("medicalCamp").collection("participants");
+  const feedbackCollection = client.db("medicalCamp").collection("feedback");
+  const usersCollection = client.db("medicalCamp").collection("users");
+  const paymentsCollection = client.db("medicalCamp").collection("payments");
+
 
 // Generate JWT token
 app.post('/jwt', async (req, res) => {
@@ -59,22 +56,6 @@ const verifyToken = (req, res, next) => {
     next();
   });
 };
-
-const verifyOrganizer = async (req, res, next) => {
-  const email = req.decoded.email;
-  const query = { email: email };
-  const user = await usersCollection.findOne(query);
-  const isOrganizer = user?.role === 'organizer';
-  if (!isOrganizer) {
-    return res.status(404).send({ message: 'forbidden access' });
-  }
-  next();
-}
-
-// Root route
-app.get('/', (req, res) => {
-  res.send('Medical Camp Management System (MCMS) is running');
-});
 
 // Add user role
 app.post('/users', async (req, res) => {
@@ -158,7 +139,6 @@ app.patch('/users/organizer-profile/:id', verifyToken, async (req, res) => {
     res.status(500).send({ message: 'Error updating organizer profile' });
   }
 });
-
 
 app.patch('/users/organizer/:id', verifyToken, async (req, res) => {
   const id = req.params.id;
@@ -677,9 +657,22 @@ app.delete('/payments/:id', async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to cancel registration.' });
   }
 });
+  
+// await client.db("admin").command({ ping: 1 });
+// console.log("Pinged your deployment. You successfully connected to MongoDB!");
+} finally {
+// await client.close()
+}
 
+}
 
+// Call the function to establish a connection
+run().catch(console.dir);
 
+// Root route
+app.get('/', (req, res) => {
+  res.send('Medical Camp Management System (MCMS) is running');
+});
 // Start the server
 app.listen(port, () => {
   console.log(`Medical Camp Management System (MCMS) is running on port  ${port}`);
